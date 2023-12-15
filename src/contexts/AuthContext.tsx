@@ -1,13 +1,14 @@
-import { IContextType, IUser } from "@/types";
+import { getCurrentUser } from "@/lib/appwrite/api";
+import { IUser } from "@/types";
 import { createContext, useContext, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 export const INITIAL_USER = {
   id: "",
-  name: {
-    username: "",
-    email: "",
-    imageUrl: "",
-  },
+  name: "",
+  username: "",
+  email: "",
+  imageUrl: "",
   bio: "",
 };
 
@@ -20,6 +21,15 @@ const INITIAL_STATE = {
   checkAuthUser: async () => false as boolean,
 };
 
+type IContextType = {
+  user: IUser;
+  isLoading: boolean;
+  setUser: React.Dispatch<React.SetStateAction<IUser>>;
+  isAuthenticated: boolean;
+  setIsAuthenticated: React.Dispatch<React.SetStateAction<boolean>>;
+  checkAuthUser: () => Promise<boolean>;
+};
+
 const AuthContext = createContext<IContextType>(INITIAL_STATE);
 
 function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -27,7 +37,46 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  const checkAuthUser = () => {};
+  const navigate = useNavigate();
+
+  useEffect(
+    function () {
+      if (
+        localStorage.getItem("cookieFallback") === "[]" ||
+        localStorage.getItem("cookieFallback") === null
+      )
+        navigate("/sign-in");
+      checkAuthUser();
+    },
+    [navigate]
+  );
+
+  const checkAuthUser = async () => {
+    try {
+      const currentAccount = await getCurrentUser();
+
+      if (currentAccount) {
+        setUser({
+          id: currentAccount.$id,
+          name: currentAccount.name,
+          username: currentAccount.username,
+          email: currentAccount.email,
+          imageUrl: currentAccount.imageUrl,
+          bio: currentAccount.bio,
+        });
+
+        setIsAuthenticated(true);
+
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const value = {
     user,
@@ -38,7 +87,9 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
     checkAuthUser,
   };
 
-  return <AuthContext.Provider></AuthContext.Provider>;
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
+
+export const useUserContext = () => useContext(AuthContext);
 
 export default AuthProvider;
